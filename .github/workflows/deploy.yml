@@ -30,34 +30,27 @@ jobs:
           echo "login = \"${{ secrets.AUTH_LOGIN }}\"" >> config.ini
           echo "password = \"${{ secrets.AUTH_PASSWORD }}\"" >> config.ini
 
+      - name: Copy config.ini to server
+        run: |
+          sshpass -p "${{ secrets.SERVER_PASSWORD }}" scp -o StrictHostKeyChecking=no -P "${{ secrets.SSH_PORT }}" config.ini "root@${{ secrets.SERVER_HOST }}:/var/www/boiler-monitor/config.ini"
+
       - name: Deploy via SSH
         run: |
-          sudo apt-get update && sudo apt-get install -y sshpass
-          
-          # Копируем config.ini
-          sshpass -p "${{ secrets.SERVER_PASSWORD }}" scp -o StrictHostKeyChecking=no -P ${{ secrets.SSH_PORT }} config.ini root@${{ secrets.SERVER_HOST }}:/var/www/boiler-monitor/config.ini
-          
-          # Деплой через git pull
-          sshpass -p "${{ secrets.SERVER_PASSWORD }}" ssh -o StrictHostKeyChecking=no -P ${{ secrets.SSH_PORT }} root@${{ secrets.SERVER_HOST }} "
+          sshpass -p "${{ secrets.SERVER_PASSWORD }}" ssh -o StrictHostKeyChecking=no -p "${{ secrets.SSH_PORT }}" "root@${{ secrets.SERVER_HOST }}" "
             cd /var/www/boiler-monitor
             
-            # Бекапим данные, если нужно
             if [ -f data/boiler.db ]; then
               cp data/boiler.db /tmp/boiler_backup.db
             fi
             
-            # Обновляем код
             git fetch origin
             git reset --hard origin/main
             
-            # Создаём папки для БД, если нет
             mkdir -p data
             
-            # Права
             chown -R www-data:www-data .
             chmod -R 755 .
             chmod 777 data
             
-            # Рестарт сервера
             systemctl reload apache2
           "
