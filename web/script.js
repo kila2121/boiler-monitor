@@ -131,8 +131,16 @@ async function load() {
             const d = json.deviations[param];
             const row = document.createElement('tr');
             if (d.status === '⚠️') row.classList.add('warn');
+            let label = param;
+            switch(param) {
+                case 'excess_air':        label = 'Избыток воздуха'; break;
+                case 'steam_pressure':    label = 'Давление пара'; break;
+                case 'steam_temperature': label = 'Температура пара'; break;
+                case 'flue_gas_temp':     label = 'Температура уходящих газов'; break;
+                case 'gas_flow':          label = 'Расход газа'; break;
+            }
             row.innerHTML = `
-                <td>${param}</td>
+                <td>${label}</td>
                 <td>${d.fact}</td>
                 <td>${d.ref}</td>
                 <td>${d.dev}</td>
