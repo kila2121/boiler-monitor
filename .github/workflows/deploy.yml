@@ -12,45 +12,48 @@ jobs:
 
       - name: Create config.ini from secrets
         run: |
-          echo "[database]" > config.ini
-          echo "host = \"${{ secrets.DB_HOST }}\"" >> config.ini
-          echo "port = \"${{ secrets.DB_PORT }}\"" >> config.ini
-          echo "name = \"${{ secrets.DB_NAME }}\"" >> config.ini
-          echo "user = \"${{ secrets.DB_USER }}\"" >> config.ini
-          echo "pass = \"${{ secrets.DB_PASS }}\"" >> config.ini
-          echo "" >> config.ini
-          echo "[modules]" >> config.ini
-          echo "active_boiler = \"tgm96\"" >> config.ini
-          echo "provider = \"random_with_db\"" >> config.ini
-          echo "reference = \"static\"" >> config.ini
-          echo "calculator = \"simple\"" >> config.ini
-          echo "interval = \"10\"" >> config.ini
-          echo "" >> config.ini
-          echo "[accessUser]" >> config.ini
-          echo "login = \"${{ secrets.AUTH_LOGIN }}\"" >> config.ini
-          echo "password = \"${{ secrets.AUTH_PASSWORD }}\"" >> config.ini
+          cat > config.ini << EOF
+          [database]
+          host = "${{ secrets.DB_HOST }}"
+          port = "${{ secrets.DB_PORT }}"
+          name = "${{ secrets.DB_NAME }}"
+          user = "${{ secrets.DB_USER }}"
+          pass = "${{ secrets.DB_PASS }}"
+
+          [modules]
+          active_boiler = "tgm96"
+          provider = "random_with_db"
+          reference = "static"
+          calculator = "simple"
+          interval = "10"
+
+          [accessUser]
+          login = "${{ secrets.AUTH_LOGIN }}"
+          password = "${{ secrets.AUTH_PASSWORD }}"
+          EOF
 
       - name: Copy config.ini to server
         run: |
-          sshpass -p "${{ secrets.SERVER_PASSWORD }}" scp -o StrictHostKeyChecking=no -P "${{ secrets.SSH_PORT }}" config.ini "root@${{ secrets.SERVER_HOST }}:/var/www/boiler-monitor/config.ini"
+          sshpass -p "${{ secrets.SERVER_PASSWORD }}" \
+            scp -o StrictHostKeyChecking=no \
+            -P "${{ secrets.SSH_PORT }}" \
+            config.ini \
+            "root@${{ secrets.SERVER_HOST }}:/var/www/boiler-monitor/config.ini"
 
-      - name: Deploy via SSH
+      - name: Deploy via Git
         run: |
-          sshpass -p "${{ secrets.SERVER_PASSWORD }}" ssh -o StrictHostKeyChecking=no -p "${{ secrets.SSH_PORT }}" "root@${{ secrets.SERVER_HOST }}" "
-            cd /var/www/boiler-monitor
-            
-            if [ -f data/boiler.db ]; then
-              cp data/boiler.db /tmp/boiler_backup.db
-            fi
-            
-            git fetch origin
-            git reset --hard origin/main
-            
-            mkdir -p data
-            
-            chown -R www-data:www-data .
-            chmod -R 755 .
-            chmod 777 data
-            
-            systemctl reload apache2
-          "
+          sshpass -p "${{ secrets.SERVER_PASSWORD }}" \
+            ssh -o StrictHostKeyChecking=no \
+            -p "${{ secrets.SSH_PORT }}" \
+            "root@${{ secrets.SERVER_HOST }}" \
+            "cd /var/www/boiler-monitor && \
+             git config --global --add safe.directory /var/www/boiler-monitor && \
+             if [ -f data/boiler.db ]; then cp data/boiler.db /tmp/boiler_backup.db; fi && \
+             git fetch origin && \
+             git reset --hard origin/main && \
+             mkdir -p data && \
+             if [ -f /tmp/boiler_backup.db ]; then cp /tmp/boiler_backup.db data/boiler.db; fi && \
+             chown -R www-data:www-data . && \
+             chmod -R 755 . && \
+             chmod 777 data && \
+             systemctl reload apache2"
