@@ -1,0 +1,400 @@
+/* === Сброс и основа === */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+:root {
+    --gap: clamp(6px, 2vw, 20px);
+    --radius: clamp(10px, 2vw, 16px);
+    --padding: clamp(10px, 3vw, 30px);
+    --font-sm: clamp(12px, 2vw, 14px);
+    --font-md: clamp(14px, 2.5vw, 16px);
+    --font-lg: clamp(18px, 4vw, 28px);
+    --font-xl: clamp(22px, 5vw, 26px);
+    --container: min(100% - var(--gap) * 2, 1000px);
+    --header-height: 60px; /* высота области кнопки + отступ */
+}
+
+body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    background: radial-gradient(circle at 20% 30%, #1e293b 0%, #0f172a 100%);
+    min-height: 100vh;
+    min-height: 100dvh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    color: #e2e8f0;
+    padding: var(--gap);
+    overflow-x: hidden;
+}
+
+/* Декоративный фон (точки) */
+body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.02'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+    pointer-events: none;
+}
+
+/* === Уведомления === */
+.error,
+.success {
+    position: fixed;
+    top: calc(var(--header-height) + var(--gap)); /* ниже кнопки */
+    right: var(--gap);
+    max-width: min(420px, calc(100vw - var(--gap) * 2));
+    padding: calc(var(--padding) * 0.5) calc(var(--padding) * 1.5) calc(var(--padding) * 0.5) calc(var(--padding) * 0.7);
+    border-radius: var(--radius);
+    font-size: var(--font-sm);
+    font-weight: 500;
+    z-index: 1000;
+    backdrop-filter: blur(12px) saturate(180%);
+    -webkit-backdrop-filter: blur(12px) saturate(180%);
+    background: rgba(255, 255, 255, 0.08);
+    box-shadow: 0 20px 35px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.1);
+    color: #f1f5f9;
+    word-wrap: break-word;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    
+    opacity: 0;
+    transform: translateX(120px) scale(0.9);
+    transition: opacity 0.45s cubic-bezier(0.4, 0, 0.2, 1), 
+                transform 0.45s cubic-bezier(0.4, 0, 0.2, 1);
+    pointer-events: none;
+}
+
+.error::before,
+.success::before {
+    font-size: calc(var(--font-sm) * 1.3);
+    flex-shrink: 0;
+}
+
+.error.show,
+.success.show {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+    pointer-events: auto;
+}
+
+.error.hiding,
+.success.hiding {
+    opacity: 0;
+    transform: translateX(120px) scale(0.85);
+    transition: opacity 0.3s ease-in, transform 0.3s ease-in;
+}
+
+.error { border-left: 4px solid #ef4444; }
+.success { border-left: 4px solid #22c55e; }
+
+/* Кнопка закрытия уведомления */
+.close-btn {
+    position: absolute;
+    top: calc(var(--gap) * 0.4);
+    right: calc(var(--gap) * 0.4);
+    background: rgba(255, 255, 255, 0.05);
+    border: none;
+    font-size: calc(var(--font-sm) * 1.3);
+    line-height: 1;
+    cursor: pointer;
+    color: #cbd5e1;
+    opacity: 0.7;
+    padding: 0;
+    width: calc(var(--font-sm) * 1.8);
+    height: calc(var(--font-sm) * 1.8);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    transition: all 0.2s;
+}
+.close-btn:hover {
+    opacity: 1;
+    background: rgba(255, 255, 255, 0.15);
+    color: #fff;
+    transform: scale(1.1);
+}
+
+/* === Кнопка выхода (фиксирована справа сверху) === */
+#logout {
+    position: fixed;
+    top: var(--gap);
+    right: var(--gap);
+    z-index: 999;
+    padding: calc(var(--padding) * 0.35) calc(var(--padding) * 1);
+    background: rgba(239, 68, 68, 0.1);
+    color: #fecaca;
+    border: 1px solid rgba(239, 68, 68, 0.4);
+    border-radius: calc(var(--radius) * 0.8);
+    font-size: var(--font-sm);
+    font-weight: 600;
+    cursor: pointer;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    letter-spacing: 0.3px;
+    white-space: nowrap;
+}
+
+#logout:hover {
+    background: rgba(239, 68, 68, 0.25);
+    color: #fff;
+    border-color: rgba(239, 68, 68, 0.6);
+    box-shadow: 0 8px 20px rgba(239, 68, 68, 0.3);
+    transform: translateY(-2px);
+}
+#logout:active {
+    transform: scale(0.96) translateY(0);
+    box-shadow: none;
+}
+
+/* === Окно авторизации === */
+.auth {
+    background: rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    padding: calc(var(--padding) * 1.5) calc(var(--padding) * 1.3);
+    border-radius: calc(var(--radius) * 1.8);
+    box-shadow: 0 30px 50px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.1);
+    width: min(360px, calc(100% - var(--gap) * 2));
+    text-align: center;
+    animation: fadeInUp 0.6s cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+@keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(30px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+
+.auth form {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--gap) * 1.2);
+}
+
+.auth label {
+    text-align: left;
+    font-size: calc(var(--font-sm) * 0.85);
+    font-weight: 600;
+    color: #94a3b8;
+    margin-bottom: -0.8em;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+}
+
+.auth input {
+    width: 100%;
+    padding: calc(var(--padding) * 0.5) calc(var(--padding) * 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: calc(var(--radius) * 0.9);
+    font-size: var(--font-md);
+    transition: all 0.3s ease;
+    outline: none;
+    background: rgba(255, 255, 255, 0.05);
+    color: #f1f5f9;
+}
+.auth input:focus {
+    border-color: #3b82f6;
+    background: rgba(59, 130, 246, 0.1);
+    box-shadow: 0 0 20px rgba(59, 130, 246, 0.3);
+    transform: translateY(-2px);
+}
+
+.auth button[type="submit"] {
+    padding: calc(var(--padding) * 0.5);
+    background: linear-gradient(135deg, #2563eb, #1d4ed8);
+    color: white;
+    border: none;
+    border-radius: calc(var(--radius) * 0.9);
+    font-size: var(--font-md);
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    margin-top: 10px;
+    letter-spacing: 0.5px;
+    box-shadow: 0 10px 20px -5px rgba(37, 99, 235, 0.4);
+}
+.auth button[type="submit"]:hover {
+    background: linear-gradient(135deg, #3b82f6, #2563eb);
+    transform: translateY(-2px);
+    box-shadow: 0 15px 30px -5px rgba(37, 99, 235, 0.6);
+}
+.auth button[type="submit"]:active {
+    transform: scale(0.97) translateY(0);
+}
+
+.auth::before {
+    content: "Вход в систему";
+    display: block;
+    font-size: var(--font-xl);
+    font-weight: 700;
+    margin-bottom: calc(var(--gap) * 1.8);
+    color: #f8fafc;
+    text-shadow: 0 2px 5px rgba(0,0,0,0.3);
+}
+
+/* === Панель мониторинга === */
+.info {
+    width: var(--container);
+    background: rgba(255, 255, 255, 0.03);
+    backdrop-filter: blur(16px) saturate(180%);
+    -webkit-backdrop-filter: blur(16px) saturate(180%);
+    border-radius: calc(var(--radius) * 1.8);
+    padding: var(--padding);
+    box-shadow: 0 30px 50px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.08);
+    animation: fadeInUp 0.6s cubic-bezier(0.23, 1, 0.32, 1);
+    overflow-x: auto;
+}
+
+.info h1 {
+    text-align: center;
+    margin-bottom: calc(var(--gap) * 1.5);
+    font-size: var(--font-lg);
+    font-weight: 700;
+    color: #f1f5f9;
+    text-shadow: 0 2px 8px rgba(0,0,0,0.4);
+    letter-spacing: 0.5px;
+}
+
+/* === Таблица === */
+table {
+    width: 100%;
+    min-width: 450px; /* минимальная ширина для читаемости */
+    border-collapse: collapse;
+    border-radius: var(--radius);
+    overflow: hidden;
+    background: rgba(0, 0, 0, 0.2);
+}
+
+th {
+    background: rgba(37, 99, 235, 0.3);
+    color: #f8fafc;
+    font-weight: 600;
+    padding: calc(var(--padding) * 0.45) calc(var(--padding) * 0.4);
+    font-size: var(--font-sm);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    border-bottom: 2px solid rgba(59, 130, 246, 0.5);
+    white-space: nowrap;
+}
+
+td, th {
+    padding: calc(var(--padding) * 0.4);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    text-align: center;
+    font-size: var(--font-sm);
+}
+
+tr {
+    transition: background 0.2s ease;
+}
+
+tr:nth-child(even) {
+    background: rgba(255, 255, 255, 0.02);
+}
+
+tr:hover {
+    background: rgba(59, 130, 246, 0.15) !important;
+}
+
+tr.warn {
+    background: rgba(239, 68, 68, 0.2) !important;
+    font-weight: 600;
+    color: #fecaca;
+    animation: subtlePulse 2s infinite;
+}
+
+@keyframes subtlePulse {
+    0%, 100% { background: rgba(239, 68, 68, 0.2); }
+    50%      { background: rgba(239, 68, 68, 0.35); }
+}
+
+td {
+    color: #cbd5e1;
+}
+tr.warn td {
+    color: #fca5a5;
+}
+
+/* === Адаптивность (только для микро-экранов) === */
+@media (max-width: 360px) {
+    :root {
+        --padding: 6px;
+        --gap: 3px;
+        --header-height: 44px;
+    }
+    table {
+        min-width: 350px;
+    }
+    th, td {
+        font-size: 10px;
+        padding: 4px 3px;
+    }
+    .info h1 {
+        font-size: 16px;
+    }
+    #logout {
+        padding: 5px 12px;
+        font-size: 12px;
+    }
+}
+
+/* === Вкладки === */
+.tabs {
+    display: flex;
+    gap: calc(var(--gap) * 0.5);
+    margin-bottom: calc(var(--gap) * 1.5);
+    justify-content: center;
+}
+
+.tab {
+    padding: calc(var(--padding) * 0.3) calc(var(--padding) * 1);
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: calc(var(--radius) * 0.6);
+    color: #94a3b8;
+    font-size: var(--font-sm);
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.tab.active {
+    background: rgba(37, 99, 235, 0.3);
+    color: #fff;
+    border-color: rgba(59, 130, 246, 0.5);
+}
+
+.tab:hover:not(.active) {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+/* === Сетка графиков === */
+.chart-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 450px), 1fr));
+    gap: calc(var(--gap) * 1.5);
+}
+
+.chart-container {
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: var(--radius);
+    padding: var(--padding);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.chart-container h3 {
+    text-align: center;
+    margin-bottom: calc(var(--gap) * 1);
+    font-size: var(--font-sm);
+    font-weight: 600;
+    color: #cbd5e1;
+}
+
+.chart-container canvas {
+    width: 100% !important;
+    max-height: 300px;
+}
