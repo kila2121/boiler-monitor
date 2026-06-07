@@ -41,7 +41,15 @@
             </form>
         </div>
     <?php else: ?>
-        <button id="logout">Выйти</button>
+        <div class="top-bar">
+            <div class="top-bar-left">
+                <button id="themeToggle" title="Сменить тему">🌙</button>
+            </div>
+            <div class="top-bar-right">
+                <button id="logout">Выйти</button>
+            </div>
+        </div>
+        <button id="soundToggle">🔇 Звук выключен</button>
         <div class="info">
             <input type="hidden" name="csrf_token" value="<?= generate_csrf_token() ?>">
             <h1 id="boilerName">Загрузка...</h1>
@@ -52,6 +60,15 @@
 
         <!-- Таблица -->
         <div id="tab-table" class="tab-content active">
+            <div class="export-panel">
+                <select id="exportPeriod">
+                    <option value="60">За час</option>
+                    <option value="180">За 3 часа</option>
+                    <option value="720">За 12 часов</option>
+                    <option value="1440">За сутки</option>
+                </select>
+                <button id="exportExcel">📊 Скачать Excel</button>
+            </div>
             <table id="dataTable">
                 <thead><tr><th>Параметр</th><th>Факт</th><th>Эталон</th><th>Отклонение</th><th>Статус</th></tr></thead>
                 <tbody></tbody>
@@ -60,6 +77,15 @@
 
         <!-- Графики -->
         <div id="tab-charts" class="tab-content" style="display:none">
+            <div class="chart-controls">
+                <select id="chartPeriod">
+                    <option value="30">За 30 минут</option>
+                    <option value="60">За 1 час</option>
+                    <option value="180">За 3 часа</option>
+                    <option value="720">За 12 часов</option>
+                    <option value="1440">За сутки</option>
+                </select>
+            </div>
             <div class="chart-grid">
                 <div class="chart-container">
                     <h3>Температура уходящих газов</h3>

@@ -33,6 +33,11 @@
             }
 
             $ini = parse_ini_file(__DIR__ . '/../../config.ini', true);
+            if (!$ini) {
+                header('Content-Type: application/json');
+                echo json_encode(['success' => false, 'message' => 'Ошибка конфигурации']);
+                exit;
+            }
             $userConfig = $ini['accessUser'];
             $login = $userConfig['login'];
             $password = $userConfig['password'];
