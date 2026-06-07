@@ -1,11 +1,11 @@
 <?php
 function calculate($fact, $ref, $boiler) {
     $db = getDB();
-    $pdo = $db->dbs;  // получаем PDO из объекта pdo_create
+    $pdo = $db->dbs;
     
     $measurementId = $fact['insert_id'] ?? null;
     $result = [];
-
+    
     $maxDeviations = $ref['max_deviation'] ?? [];
     
     foreach ($fact as $key => $value) {
@@ -25,7 +25,12 @@ function calculate($fact, $ref, $boiler) {
 
         if ($measurementId && $status === '⚠️') {
             $stmt = $pdo->prepare("INSERT INTO deviation_log (measurement_id, parameter, deviation, status) VALUES (:mid, :param, :dev, :status)");
-            $stmt->execute([':mid' => $measurementId, ':param' => $key, ':dev' => $dev, ':status' => $status]);
+            $stmt->execute([
+                ':mid'    => $measurementId,
+                ':param'  => $key,
+                ':dev'    => $dev,
+                ':status' => $status
+            ]);
         }
     }
 

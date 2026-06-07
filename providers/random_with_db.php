@@ -8,62 +8,55 @@ function getCurrentData($boiler) {
         
         $stmt = $pdo->prepare("SELECT id FROM boilers WHERE code = :code");
         $stmt->execute([':code' => $boiler['id']]);
-        $boilerRow = $stmt->fetch();
+        $boilerId = $stmt->fetchColumn();
         
-        if (!$boilerRow) {
+        if (!$boilerId) {
             return ['error' => 'Котёл не найден в БД: ' . $boiler['id']];
         }
         
-        $boilerId = $boilerRow['id'];
-        
-        $measurementData = [
-            'boiler_id' => $boilerId,
-            'load'      => $load,
-            'timestamp' => date('Y-m-d H:i:s')
-        ];
-        
-        $result = $db->actionTable('add', $measurementData, 'measurements');
-        if (!$result) {
-            return ['error' => 'Ошибка записи замера: ' . $db->last_error];
-        }
-        
+        $stmt = $pdo->prepare("INSERT INTO measurements (boiler_id, `load`, `timestamp`) VALUES (:bid, :ld, :ts)");
+        $stmt->execute([
+            ':bid' => $boilerId,
+            ':ld'  => $load,
+            ':ts'  => date('Y-m-d H:i:s')
+        ]);
         $measurementId = $pdo->lastInsertId();
         
-        foreach ($boiler['parameters'] as $param) {
-            $stmt = $pdo->prepare("SELECT id FROM parameters WHERE code = :code");
-            $stmt->execute([':code' => $param]);
-            $paramRow = $stmt->fetch();
-            
-            if (!$paramRow) continue;
-            
-            $base = $boiler['reference'][$param] ?? 0;
-            $value = round($base * (1 + (mt_rand(-200, 200) / 10000)), 2);
-            
-            $db->actionTable('add', [
-                'measurement_id' => $measurementId,
-                'parameter_id'   => $paramRow['id'],
-                'value'          => $value
-            ], 'measurement_values');
-        }
+        $stmt = $pdo->prepare("
+            SELECT p.id, p.code, rv.reference_value
+            FROM reference_values rv
+            JOIN parameters p ON p.id = rv.parameter_id
+            WHERE rv.boiler_id = :bid 
+              AND rv.load_min <= :ld1 
+              AND rv.load_max >= :ld2
+        ");
+        $stmt->execute([
+            ':bid' => $boilerId,
+            ':ld1' => $load,
+            ':ld2' => $load
+        ]);
+        $refs = $stmt->fetchAll();
         
         $fact = [
             'boiler_id'  => $boiler['id'],
             'load'       => $load,
-            'timestamp'  => $measurementData['timestamp'],
+            'timestamp'  => date('Y-m-d H:i:s'),
             'insert_id'  => $measurementId
         ];
         
-        $stmt = $pdo->prepare("
-            SELECT p.code, mv.value 
-            FROM measurement_values mv 
-            JOIN parameters p ON p.id = mv.parameter_id 
-            WHERE mv.measurement_id = :mid
-        ");
-        $stmt->execute([':mid' => $measurementId]);
-        $values = $stmt->fetchAll();
+        $stmtVal = $pdo->prepare("INSERT INTO measurement_values (measurement_id, parameter_id, value) VALUES (:mid, :pid, :val)");
         
-        foreach ($values as $row) {
-            $fact[$row['code']] = (float)$row['value'];
+        foreach ($refs as $ref) {
+            $base = (float)$ref['reference_value'];
+            $value = round($base * (1 + (mt_rand(-200, 200) / 10000)), 2);
+            
+            $stmtVal->execute([
+                ':mid' => $measurementId,
+                ':pid' => $ref['id'],
+                ':val' => $value
+            ]);
+            
+            $fact[$ref['code']] = $value;
         }
         
         return $fact;

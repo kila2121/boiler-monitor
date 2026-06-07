@@ -23,7 +23,7 @@ jobs:
           [modules]
           active_boiler = "tgm96"
           provider = "random_with_db"
-          reference = "static"
+          reference = "database"
           calculator = "simple"
           interval = "10"
 
@@ -48,12 +48,8 @@ jobs:
             "root@${{ secrets.SERVER_HOST }}" \
             "cd /var/www/boiler-monitor && \
              git config --global --add safe.directory /var/www/boiler-monitor && \
-             if [ -f data/boiler.db ]; then cp data/boiler.db /tmp/boiler_backup.db; fi && \
              git fetch origin && \
              git reset --hard origin/main && \
-             mkdir -p data && \
-             if [ -f /tmp/boiler_backup.db ]; then cp /tmp/boiler_backup.db data/boiler.db; fi && \
              chown -R www-data:www-data . && \
              chmod -R 755 . && \
-             chmod 777 data && \
              systemctl reload apache2"
