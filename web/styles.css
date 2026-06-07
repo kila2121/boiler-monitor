@@ -631,7 +631,7 @@ tr.warn td { color: #fca5a5; }
     border-radius: var(--radius);
     font-size: var(--font-sm);
     font-weight: 500;
-    z-index: 1200;
+    z-index: 1400;
     backdrop-filter: blur(14px) saturate(180%);
     -webkit-backdrop-filter: blur(14px) saturate(180%);
     background: rgba(255, 255, 255, 0.08);

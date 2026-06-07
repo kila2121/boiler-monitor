@@ -438,6 +438,96 @@ document.getElementById('boilerSelect').addEventListener('change', function() {
 document.getElementById('btn-setting').addEventListener('click', async function() {
     document.querySelector('.settings').classList.add('open');
     await loadSettings();
+    
+    document.getElementById('saveReference').onclick = async function() {
+        try {
+            const boilerCode = document.getElementById('settingsBoilerSelect').value;
+            const loadMin = document.getElementById('refLoadMin').value;
+            const loadMax = document.getElementById('refLoadMax').value;
+            
+            if (!loadMin || !loadMax) {
+                showMessage('error', 'Выберите диапазон нагрузок');
+                return;
+            }
+            
+            const values = {};
+            let hasError = false;
+            document.querySelectorAll('#referenceTable tbody tr').forEach(row => {
+                const paramId = row.querySelector('input[data-param]').dataset.param;
+                const value = row.querySelectorAll('input')[0].value;
+                const deviation = row.querySelectorAll('input')[1].value;
+                if (!value || !deviation) hasError = true;
+                values[paramId] = { value: value, deviation: deviation };
+            });
+            
+            if (hasError) {
+                showMessage('error', 'Заполните все поля');
+                return;
+            }
+            
+            const res = await fetch('index.php?action=save_settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: `action=saveReference&boiler_id=${boilerCode}&load_min=${loadMin}&load_max=${loadMax}&values=${encodeURIComponent(JSON.stringify(values))}`
+            });
+            const data = await res.json();
+            if (data.success) {
+                showMessage('success', 'Эталоны сохранены');
+                await loadSettings(); // Перезагружаем настройки
+            } else {
+                showMessage('error', data.message || 'Ошибка');
+            }
+        } catch(e) {
+            showMessage('error', 'Ошибка сети');
+        }
+    };
+    
+    document.getElementById('saveBoilerParams').onclick = async function() {
+        try {
+            const boilerCode = document.getElementById('settingsBoilerSelect').value;
+            const res = await fetch('index.php?action=save_settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: `action=saveBoilerParams&boiler_id=${boilerCode}&nominal_load=${document.getElementById('editNominalLoad').value}&load_min=${document.getElementById('editLoadMin').value}&load_max=${document.getElementById('editLoadMax').value}`
+            });
+            const data = await res.json();
+            if (data.success) showMessage('success', 'Параметры котла сохранены');
+            else showMessage('error', data.message || 'Ошибка');
+        } catch(e) {
+            showMessage('error', 'Ошибка сети');
+        }
+    };
+    
+    document.getElementById('saveRetention').onclick = async function() {
+        try {
+            const days = document.getElementById('retentionDays').value;
+            const res = await fetch('index.php?action=save_settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: `action=updateRetention&days=${days}`
+            });
+            const data = await res.json();
+            if (data.success) showMessage('success', 'Период хранения обновлён');
+            else showMessage('error', data.message || 'Ошибка');
+        } catch(e) {
+            showMessage('error', 'Ошибка сети');
+        }
+    };
+    
+    document.getElementById('cleanNow').onclick = async function() {
+        try {
+            const res = await fetch('index.php?action=save_settings', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: 'action=cleanNow'
+            });
+            const data = await res.json();
+            if (data.success) showMessage('success', 'Старые записи удалены');
+            else showMessage('error', data.message || 'Ошибка');
+        } catch(e) {
+            showMessage('error', 'Ошибка сети');
+        }
+    };
 });
 
 async function loadSettings() {
@@ -452,16 +542,58 @@ async function loadSettings() {
         document.getElementById('editLoadMin').value = data.boiler.load_min;
         document.getElementById('editLoadMax').value = data.boiler.load_max;
         
-        // Заполняем эталоны (первый диапазон)
-        if (data.references.length) {
-            const first = data.references[0];
-            document.getElementById('refLoadMin').value = first.load_min;
-            document.getElementById('refLoadMax').value = first.load_max;
+        // Получаем уникальные диапазоны из БД
+        const ranges = [];
+        data.references.forEach(ref => {
+            const key = `${ref.load_min}_${ref.load_max}`;
+            if (!ranges.find(r => r.load_min === ref.load_min && r.load_max === ref.load_max)) {
+                ranges.push({ load_min: ref.load_min, load_max: ref.load_max });
+            }
+        });
+        
+        // Создаем или обновляем select для выбора диапазона
+        let rangeSelect = document.getElementById('refRangeSelect');
+        const container = document.getElementById('refLoadMin').parentElement;
+        
+        if (!rangeSelect) {
+            // Создаем новый select
+            const selectHtml = `
+                <div style="margin-bottom: 15px;">
+                    <label style="display: inline-block; width: 150px;">Диапазон нагрузки:</label>
+                    <select id="refRangeSelect" style="padding: 5px;">
+                        ${ranges.map(r => `<option value="${r.load_min}|${r.load_max}">${r.load_min} - ${r.load_max} т/ч</option>`).join('')}
+                    </select>
+                </div>
+            `;
+            container.insertAdjacentHTML('beforebegin', selectHtml);
+            rangeSelect = document.getElementById('refRangeSelect');
+        } else {
+            // Обновляем существующий select
+            rangeSelect.innerHTML = ranges.map(r => `<option value="${r.load_min}|${r.load_max}">${r.load_min} - ${r.load_max} т/ч</option>`).join('');
+            rangeSelect.style.display = 'inline-block';
+        }
+        
+        // Скрываем поля ввода диапазона (чтобы пользователь не менял вручную)
+        document.getElementById('refLoadMin').style.display = 'none';
+        document.getElementById('refLoadMax').style.display = 'none';
+        document.querySelector('label[for="refLoadMin"]')?.remove();
+        document.querySelector('label[for="refLoadMax"]')?.remove();
+        
+        // Функция загрузки эталонов для выбранного диапазона
+        function loadReferencesForRange(loadMin, loadMax) {
+            // Сохраняем выбранные значения в скрытые поля (для отправки на сервер)
+            document.getElementById('refLoadMin').value = loadMin;
+            document.getElementById('refLoadMax').value = loadMax;
+            
+            const filtered = data.references.filter(ref => 
+                parseFloat(ref.load_min) === parseFloat(loadMin) && 
+                parseFloat(ref.load_max) === parseFloat(loadMax)
+            );
             
             const tbody = document.querySelector('#referenceTable tbody');
             tbody.innerHTML = '';
             
-            data.references.forEach(ref => {
+            filtered.forEach(ref => {
                 tbody.innerHTML += `
                     <tr>
                         <td>${ref.name} (${ref.unit})</td>
@@ -471,8 +603,22 @@ async function loadSettings() {
                 `;
             });
         }
+        
+        // Загружаем первый диапазон
+        if (ranges.length) {
+            const first = ranges[0];
+            loadReferencesForRange(first.load_min, first.load_max);
+        }
+        
+        // Обработчик изменения диапазона
+        rangeSelect.onchange = () => {
+            const [loadMin, loadMax] = rangeSelect.value.split('|');
+            loadReferencesForRange(loadMin, loadMax);
+        };
+        
     } catch (e) {
         console.error('Ошибка загрузки настроек:', e);
+        showMessage('error', 'Ошибка загрузки настроек');
     }
 }
 
