@@ -8,6 +8,7 @@
     include_once __DIR__ . "/api/stats.php";
     include_once __DIR__ . "/api/get_settings.php";
     include_once __DIR__ . "/api/save_settings.php";
+
 ?>
 
 <!DOCTYPE html>

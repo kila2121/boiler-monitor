@@ -8,16 +8,21 @@ function calculate($fact, $ref, $boiler) {
     
     $maxDeviations = $ref['max_deviation'] ?? [];
     
-    foreach ($fact as $key => $value) {
-        if (in_array($key, ['boiler_id', 'load', 'timestamp', 'insert_id', 'error'])) continue;
+    $paramKeys = [
+        'steam_pressure', 'steam_temperature', 'flue_gas_temp', 
+        'gas_flow', 'excess_air', 'o2_content', 'feedwater_temp'
+    ];
+    
+    foreach ($paramKeys as $key) {
+        if (!isset($fact[$key])) continue;
         if (!isset($ref[$key])) continue;
         
-        $dev = round($value - $ref[$key], 2);
+        $dev = round($fact[$key] - $ref[$key], 2);
         $max = $maxDeviations[$key] ?? 999;
         $status = abs($dev) > $max ? '⚠️' : '✓';
 
         $result[$key] = [
-            'fact'   => $value,
+            'fact'   => $fact[$key],
             'ref'    => $ref[$key],
             'dev'    => $dev,
             'status' => $status

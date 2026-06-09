@@ -1,5 +1,8 @@
 <?php
-    session_start();
+
+    if (session_status() === PHP_SESSION_NONE) {
+        session_start();
+    }
     include_once __DIR__ . "/../../classes/csrf.php";
 
     if(isset($_REQUEST['action'])){
