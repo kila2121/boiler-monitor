@@ -8,14 +8,12 @@
     include_once __DIR__ . "/api/stats.php";
     include_once __DIR__ . "/api/get_settings.php";
     include_once __DIR__ . "/api/save_settings.php";
-
 ?>
-
 <!DOCTYPE html>
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Мониторинг котлоагрегата</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <link rel="stylesheet" href="styles.css">
@@ -58,7 +56,6 @@
         <button id="soundToggle">🔇 Звук выключен</button>
 
         <div class="main-layout">
-            <!-- Основной контент -->
             <div class="content">
                 <div class="info">
                     <input type="hidden" name="csrf_token" value="<?= generate_csrf_token() ?>">
@@ -68,7 +65,6 @@
                         <button class="tab" data-tab="charts">Графики</button>
                     </div>
 
-                    <!-- Таблица -->
                     <div id="tab-table" class="tab-content active">
                         <div class="export-panel">
                             <select id="exportPeriod">
@@ -79,13 +75,18 @@
                             </select>
                             <button id="exportExcel">📊 Скачать Excel</button>
                         </div>
-                        <table id="dataTable">
-                            <thead><tr><th>Параметр</th><th>Факт</th><th>Эталон</th><th>Отклонение</th><th>Статус</th></tr></thead>
-                            <tbody></tbody>
-                        </table>
+                        <div class="table-wrapper">
+                            <table id="dataTable">
+                                <thead>
+                                    <tr>
+                                        <th>Параметр</th><th>Факт</th><th>Эталон</th><th>Отклонение</th><th>Статус</th>
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
                     </div>
 
-                    <!-- Графики -->
                     <div id="tab-charts" class="tab-content" style="display:none">
                         <div class="chart-controls">
                             <select id="chartPeriod">
@@ -118,7 +119,6 @@
                 </div>
             </div>
 
-            <!-- Боковая панель (сайдбар) -->
             <aside class="sidebar">
                 <div class="sidebar-card">
                     <label for="boilerSelect">Котёл</label>
@@ -137,7 +137,6 @@
         <div class="settings">
             <h1>Настройки</h1>
             
-            <!-- Выбор котла для редактирования -->
             <div class="settings-section">
                 <label>Котёл</label>
                 <select id="settingsBoilerSelect">
@@ -145,15 +144,14 @@
                 </select>
             </div>
             
-            <!-- Редактирование эталонов -->
             <div class="settings-section">
                 <h2>Эталонные значения</h2>
                 <div id="referenceEditor">
-                    <div class="ref-range">
-                        <label>Диапазон нагрузки: 
-                            <input type="number" id="refLoadMin" placeholder="от" style="width:80px"> –
-                            <input type="number" id="refLoadMax" placeholder="до" style="width:80px"> т/ч
-                        </label>
+                    <div style="margin-bottom:15px;">
+                        <label style="display:inline-block; width:150px;">Диапазон нагрузки:</label>
+                        <select id="refRangeSelect" style="padding:5px;">
+                            <option value="">Загрузка...</option>
+                        </select>
                     </div>
                     <table id="referenceTable">
                         <thead>
@@ -165,18 +163,6 @@
                 </div>
             </div>
             
-            <!-- Редактирование параметров котла -->
-            <div class="settings-section">
-                <h2>Параметры котла</h2>
-                <div id="boilerParamsEditor">
-                    <label>Номинальная нагрузка: <input type="number" id="editNominalLoad"> т/ч</label>
-                    <label>Мин. нагрузка: <input type="number" id="editLoadMin"> т/ч</label>
-                    <label>Макс. нагрузка: <input type="number" id="editLoadMax"> т/ч</label>
-                    <button id="saveBoilerParams">Сохранить</button>
-                </div>
-            </div>
-            
-            <!-- Управление событием очистки -->
             <div class="settings-section">
                 <h2>Очистка старых записей</h2>
                 <label>Хранить записи (дней): <input type="number" id="retentionDays" value="1" min="1" max="30"></label>
@@ -197,7 +183,6 @@
             }, 3000);
         });
         const logout = document.getElementById('logout');
-
         if (logout) {
             logout.addEventListener('click', async function() {
                 const csrfInput = document.querySelector('input[name="csrf_token"]');
@@ -205,23 +190,17 @@
                     showMessage('error', 'Ошибка: не найден CSRF-токен');
                     return;
                 }
-
                 const res = await sendRequest('index.php?action=logout',
                     {
                         method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/x-www-form-urlencoded',
-                        },
+                        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
                         body: 'csrf_token=' + encodeURIComponent(csrfInput.value)
                     },
                     null,
                     null
                 );
-
                 if (res.success) {
-                    setTimeout(()=>{
-                        location.reload();
-                    },500)
+                    setTimeout(()=> location.reload(), 500);
                     showMessage('success', "вы успешно вышли");
                 }
             });

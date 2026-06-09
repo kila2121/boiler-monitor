@@ -1,9 +1,25 @@
 <?php
+error_reporting(0);
+ini_set('display_errors', 0);
+
+if (session_status() === PHP_SESSION_NONE) {
+    session_start();
+}
+
 if (isset($_GET['action']) && $_GET['action'] === 'history') {
+    if (!isset($_SESSION['user'])) {
+        header('Content-Type: application/json');
+        echo json_encode(['error' => 'Доступ запрещён. Авторизуйтесь.']);
+        exit;
+    }
+
     require_once __DIR__ . '/../../database.php';
     
     $limit = (int)($_GET['limit'] ?? 30);
     $minutes = (int)($_GET['minutes'] ?? 0);
+    $minutes = max(0, min(10080, $minutes));
+    $limit = max(1, min(1000, $limit));
+    
     $boilerCode = $_GET['boiler'] ?? 'tgm96';
     
     $db = getDB();
@@ -63,3 +79,4 @@ if (isset($_GET['action']) && $_GET['action'] === 'history') {
     echo json_encode($data);
     exit;
 }
+?>

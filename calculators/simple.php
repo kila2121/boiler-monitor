@@ -10,8 +10,14 @@ function calculate($fact, $ref, $boiler) {
     
     $paramKeys = [
         'steam_pressure', 'steam_temperature', 'flue_gas_temp', 
-        'gas_flow', 'excess_air', 'o2_content', 'feedwater_temp'
+        'gas_flow', 'excess_air', 'o2_content', 'feedwater_temp',
+        'efficiency', 'fuel_consumption', 'heat_output', 'excess_air_target'
     ];
+    
+    $stmtLog = null;
+    if ($measurementId) {
+        $stmtLog = $pdo->prepare("INSERT IGNORE INTO deviation_log (measurement_id, parameter, deviation, status) VALUES (:mid, :param, :dev, :status)");
+    }
     
     foreach ($paramKeys as $key) {
         if (!isset($fact[$key])) continue;
@@ -29,8 +35,7 @@ function calculate($fact, $ref, $boiler) {
         ];
 
         if ($measurementId && $status === '⚠️') {
-            $stmt = $pdo->prepare("INSERT INTO deviation_log (measurement_id, parameter, deviation, status) VALUES (:mid, :param, :dev, :status)");
-            $stmt->execute([
+            $stmtLog->execute([
                 ':mid'    => $measurementId,
                 ':param'  => $key,
                 ':dev'    => $dev,
@@ -41,3 +46,4 @@ function calculate($fact, $ref, $boiler) {
 
     return $result;
 }
+?>

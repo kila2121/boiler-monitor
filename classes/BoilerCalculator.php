@@ -2,6 +2,10 @@
 
 class BoilerCalculator {
 
+    private const FUEL_CALORIFIC_STD = 7000;
+    private const FUEL_CALORIFIC_NAT = 8200;
+    private const NOMINAL_RADIATION_LOAD = 500;
+
     public static function calcFeedWaterTemp($load) {
         $a = 7.79322839345332E-09;
         $b = -0.0000105452598520494;
@@ -58,57 +62,55 @@ class BoilerCalculator {
     public static function calcEnthalpy($temp, $pressure) {
         $T = $temp + 273.15;
         $P = $pressure * 0.0980665;
-        
         $Tr = $T / 1000;
         
-        $enthalpy = (2.12787*pow(10,3) + 
-                    1.48285*pow(10,3)*$Tr + 
-                    3.79026*pow(10,2)*pow($Tr,2) + 
-                    4.6174*10*log($Tr) + 
-                    (
-                        (3.237*pow(10,-4) + 
-                         3*(-1.1354*pow(10,-3))/pow($Tr,2) + 
-                         3*(-4.381*pow(10,-4))/pow(($Tr-0.21),2) + 
-                         2*(-4.381*pow(10,-4))*0.21/pow(($Tr-0.21),3)
-                        ) * $P + 
-                        (5.6084*pow(10,-6) + 
-                         9*(-2.5993*pow(10,-6))/pow($Tr,8) + 
-                         15*(-1.2604*pow(10,-8))/pow($Tr,14)
-                        ) * pow($P,2) / 2
-                    ) * 1000
-                ) / 4.1868;
+        $h0 = 2.12787e3 + 1.48285e3 * $Tr + 3.79026e2 * pow($Tr, 2) + 4.6174 * 10 * log($Tr);
         
-        return $enthalpy;
+        $A = 3.237e-4 + 3 * (-1.1354e-3) / pow($Tr, 2) + 3 * (-4.381e-4) / pow($Tr - 0.21, 2) 
+            + 2 * (-4.381e-4) * 0.21 / pow($Tr - 0.21, 3);
+        
+        $B = 5.6084e-6 + 9 * (-2.5993e-6) / pow($Tr, 8) + 15 * (-1.2604e-8) / pow($Tr, 14);
+        
+        $h = ($h0 + ($A * $P + $B * pow($P, 2) / 2) * 1000) / 4.1868;
+        
+        return $h;
     }
 
-    public static function calcFlueGasLoss($flueGasTemp, $coldAirTemp, $o2Content, $excessAir) {
-        $loss = (3.53*$excessAir + 0.6) * ($flueGasTemp - $excessAir/($excessAir+0.18)*$coldAirTemp) * (0.9805 + 0.00013*$flueGasTemp) / 100;
-        return $loss;
+    public static function calcFlueGasLoss($flueGasTemp, $coldAirTemp, $excessAir) {
+        $excessAirSection = $excessAir - 0.25;
+        if ($excessAirSection <= 0) $excessAirSection = 1.0;
+        
+        $loss = (3.53 * $excessAirSection + 0.6) 
+                * ($flueGasTemp - $excessAirSection / ($excessAirSection + 0.18) * $coldAirTemp) 
+                * (0.9805 + 0.00013 * $flueGasTemp) / 100;
+        
+        return max(0, $loss);
     }
     
-
     public static function calcRadiationLoss($load) {
-        $nominalLoad = 500;
-        return 0.35 * $nominalLoad / $load;
+        if ($load <= 0) return 0.35;
+        return 0.35 * self::NOMINAL_RADIATION_LOAD / $load;
     }
     
-
     public static function calcEfficiency($flueGasLoss, $radiationLoss) {
-        return 100 - $flueGasLoss - $radiationLoss;
+        $efficiency = 100 - $flueGasLoss - $radiationLoss;
+        return max(0, min(100, $efficiency));
     }
     
-
     public static function calcFuelConsumptionStd($heatOutput, $efficiency) {
-        return $heatOutput / 7000 / ($efficiency/100) * 1000;
+        if ($efficiency <= 0) return 0;
+        return $heatOutput / self::FUEL_CALORIFIC_STD / ($efficiency / 100) * 1000;
     }
     
-
-    public static function calcFuelConsumptionNatural($fuelStd, $calorificValue = 8200) {
-        return $fuelStd * 7000 / $calorificValue;
+    public static function calcFuelConsumptionNatural($fuelStd, $calorificValue = null) {
+        $cv = $calorificValue ?? self::FUEL_CALORIFIC_NAT;
+        return $fuelStd * self::FUEL_CALORIFIC_STD / $cv;
     }
-
+    
     public static function calcExcessAir($o2Content) {
-        return (21 - 0.1*$o2Content) / (21 - $o2Content);
+        $o2 = max(0, min(21, $o2Content));
+        if (21 - $o2 <= 0.01) return 999;
+        return (21 - 0.1 * $o2) / (21 - $o2);
     }
     
     public static function calcFuelImpact($param, $deviation, $steamFlow) {
@@ -125,6 +127,112 @@ class BoilerCalculator {
         
         return $sign * $coef * abs($deviation) * 350 * ($steamFlow / 3.2) / 100000;
     }
+    
+    public static function calculateEfficiencyScore($actualEfficiency, $targetEfficiency, $deviations) {
+        $score = 100;
+        
+        if ($targetEfficiency > 0) {
+            $efficiencyPenalty = ($targetEfficiency - $actualEfficiency) / $targetEfficiency * 50;
+            $score -= max(0, min(50, $efficiencyPenalty));
+        }
+        
+        $deviationWeights = [
+            'steam_temperature' => 0.3,
+            'o2_content' => 0.25,
+            'flue_gas_temp' => 0.25,
+            'steam_pressure' => 0.1,
+            'feedwater_temp' => 0.1
+        ];
+        
+        $totalDeviationPenalty = 0;
+        foreach ($deviations as $param => $data) {
+            if (isset($deviationWeights[$param]) && ($data['status'] ?? '') === '⚠️') {
+                $penalty = $deviationWeights[$param] * min(20, abs($data['dev'] ?? 0) / 2);
+                $totalDeviationPenalty += $penalty;
+            }
+        }
+        
+        $score -= min(40, $totalDeviationPenalty);
+        $score = max(0, min(100, $score));
+        
+        return [
+            'score' => round($score, 1),
+            'grade' => self::getGrade($score),
+            'recommendations' => self::getRecommendations($deviations)
+        ];
+    }
+
+    private static function getGrade($score) {
+        if ($score >= 90) return 'Отлично';
+        if ($score >= 75) return 'Хорошо';
+        if ($score >= 60) return 'Удовлетворительно';
+        if ($score >= 40) return 'Требует внимания';
+        return 'Критично';
+    }
+
+    private static function getRecommendations($deviations) {
+        $recs = [];
+        foreach ($deviations as $param => $data) {
+            if (($data['status'] ?? '') !== '⚠️') continue;
+            
+            $dev = $data['dev'] ?? 0;
+            $absDev = abs($dev);
+            
+            $rec = match($param) {
+                'o2_content' => '⚠️ Содержание O₂ ' . ($dev > 0 ? 'выше' : 'ниже') . 
+                                ' нормы на ' . $absDev . '%. Настройте подачу воздуха.',
+                'flue_gas_temp' => '⚠️ Температура уходящих газов ' . ($dev > 0 ? 'выше' : 'ниже') . 
+                                   ' нормы на ' . $absDev . '°C. Очистите поверхности нагрева.',
+                'steam_temperature' => '⚠️ Температура пара ' . ($dev > 0 ? 'выше' : 'ниже') . 
+                                      ' нормы на ' . $absDev . '°C. Проверьте работу горелок.',
+                'steam_pressure' => '⚠️ Давление пара ' . ($dev > 0 ? 'выше' : 'ниже') . 
+                                   ' нормы на ' . $absDev . ' кгс/см². Проверьте настройки регуляторов.',
+                'feedwater_temp' => '⚠️ Температура питательной воды отклоняется на ' . $absDev . 
+                                    '°C. Проверьте работу подогревателей.',
+                default => "⚠️ Параметр $param: требуется проверка."
+            };
+            $recs[] = $rec;
+        }
+        
+        if (empty($recs)) {
+            $recs[] = '✅ Все параметры в норме. Режим работы оптимален.';
+        }
+        
+        return $recs;
+    }
+    
+    public static function calculateOptimalLoad($currentLoad, $minLoad, $maxLoad, $efficiency) {
+        $optimalRange = [
+            'min' => $maxLoad * 0.6,
+            'max' => $maxLoad * 0.8
+        ];
+        
+        $status = 'normal';
+        $message = '';
+        $recommendedLoad = $currentLoad;
+        
+        if ($currentLoad < $optimalRange['min']) {
+            $status = 'warning';
+            $message = 'Нагрузка ниже оптимальной. КПД может быть снижен.';
+            $recommendedLoad = $optimalRange['min'];
+        } elseif ($currentLoad > $optimalRange['max']) {
+            $status = 'warning';
+            $message = 'Нагрузка выше оптимальной. Возможен перегрев и снижение ресурса.';
+            $recommendedLoad = $optimalRange['max'];
+        } else {
+            $status = 'optimal';
+            $message = 'Нагрузка в оптимальном диапазоне.';
+        }
+        
+        return [
+            'status' => $status,
+            'message' => $message,
+            'current_load' => round($currentLoad, 1),
+            'optimal_min' => round($optimalRange['min'], 1),
+            'optimal_max' => round($optimalRange['max'], 1),
+            'recommended_load' => round($recommendedLoad, 1)
+        ];
+    }
 
     public static function calculateFull($load, $pressure, $temp, $flueGasTemp, $gasFlow, $o2Content = null, $coldAirTemp = 20) {
         $results = [];
@@ -138,7 +246,7 @@ class BoilerCalculator {
         $o2Actual = $o2Content ?? $results['o2_ref'];
         $results['excess_air'] = self::calcExcessAir($o2Actual);
         
-        $results['flue_gas_loss'] = self::calcFlueGasLoss($flueGasTemp, $coldAirTemp, $o2Actual, $results['excess_air']);
+        $results['flue_gas_loss'] = self::calcFlueGasLoss($flueGasTemp, $coldAirTemp, $results['excess_air']);
         $results['radiation_loss'] = self::calcRadiationLoss($load);
         $results['efficiency'] = self::calcEfficiency($results['flue_gas_loss'], $results['radiation_loss']);
         

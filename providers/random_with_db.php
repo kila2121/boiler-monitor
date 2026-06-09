@@ -1,5 +1,6 @@
 <?php
 function getCurrentData($boiler) {
+    usleep(mt_rand(10000, 50000));
     $load = mt_rand($boiler['load_range'][0], $boiler['load_range'][1]);
 
     try {
@@ -44,7 +45,7 @@ function getCurrentData($boiler) {
             'insert_id'  => $measurementId
         ];
         
-        $stmtVal = $pdo->prepare("INSERT INTO measurement_values (measurement_id, parameter_id, value) VALUES (:mid, :pid, :val)");
+        $stmtVal = $pdo->prepare("INSERT IGNORE INTO measurement_values (measurement_id, parameter_id, value) VALUES (:mid, :pid, :val)");
         
         foreach ($refs as $ref) {
             $base = (float)$ref['reference_value'];
@@ -65,3 +66,4 @@ function getCurrentData($boiler) {
         return ['error' => 'Ошибка БД: ' . $e->getMessage()];
     }
 }
+?>
