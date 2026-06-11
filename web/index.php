@@ -16,6 +16,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Мониторинг котлоагрегата</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -131,6 +132,12 @@
                     <div id="normalTime">✅ В норме: --</div>
                     <div id="deviationCount">⚠️ Отклонений: --</div>
                 </div>
+                <!-- НОВЫЙ БЛОК: Оценка эффективности -->
+                <div class="sidebar-card efficiency-card">
+                    <h3>Оценка эффективности</h3>
+                    <div id="efficiencyScore">--</div>
+                    <div id="efficiencyRecommendations"></div>
+                </div>
             </aside>
         </div>
 
@@ -164,6 +171,13 @@
             </div>
             
             <div class="settings-section">
+                <h2>Параметры котла</h2>
+                <label>Мин. нагрузка (т/ч): <input type="number" id="editLoadMin" step="1" value="190"></label>
+                <label>Макс. нагрузка (т/ч): <input type="number" id="editLoadMax" step="1" value="480"></label>
+                <button id="saveBoilerParams">Сохранить</button>
+            </div>
+            
+            <div class="settings-section">
                 <h2>Очистка старых записей</h2>
                 <label>Хранить записи (дней): <input type="number" id="retentionDays" value="1" min="1" max="30"></label>
                 <button id="saveRetention">Применить</button>
@@ -182,29 +196,6 @@
                 }
             }, 3000);
         });
-        const logout = document.getElementById('logout');
-        if (logout) {
-            logout.addEventListener('click', async function() {
-                const csrfInput = document.querySelector('input[name="csrf_token"]');
-                if (!csrfInput) {
-                    showMessage('error', 'Ошибка: не найден CSRF-токен');
-                    return;
-                }
-                const res = await sendRequest('index.php?action=logout',
-                    {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                        body: 'csrf_token=' + encodeURIComponent(csrfInput.value)
-                    },
-                    null,
-                    null
-                );
-                if (res.success) {
-                    setTimeout(()=> location.reload(), 500);
-                    showMessage('success', "вы успешно вышли");
-                }
-            });
-        }
     </script>
 </body>
 </html>

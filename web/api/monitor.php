@@ -4,7 +4,6 @@ ini_set('display_errors', 0);
 ini_set('memory_limit', '256M');
 ini_set('max_execution_time', 30);
 
-
 if (session_status() === PHP_SESSION_NONE) {
     session_start();
 }
@@ -66,44 +65,31 @@ if (isset($_GET['action']) && $_GET['action'] === 'monitor') {
         require_once __DIR__ . '/../../calculators/' . $modules['calculator'] . '.php';
         $deviations = calculate($fact, $ref, $boiler);
 
+        // ПРИНУДИТЕЛЬНО ДОБАВЛЯЕМ excess_air, ЕСЛИ ЕГО НЕТ
+        if (!isset($deviations['excess_air']) && isset($fact['excess_air']) && isset($ref['excess_air'])) {
+            $dev = round($fact['excess_air'] - $ref['excess_air'], 3);
+            $maxDev = $ref['max_deviation']['excess_air'] ?? 0.05;
+            $deviations['excess_air'] = [
+                'fact' => $fact['excess_air'],
+                'ref' => $ref['excess_air'],
+                'dev' => $dev,
+                'status' => abs($dev) > $maxDev ? '⚠️' : '✓'
+            ];
+        }
+
         unset($fact['insert_id']);
 
         require_once __DIR__ . '/../../classes/BoilerCalculator.php';
         
-        $o2Content = $fact['o2_content'] ?? null; 
-
         $calc = BoilerCalculator::calculateFull(
             $fact['load'] ?? 0,
             $fact['steam_pressure'] ?? 0,
             $fact['steam_temperature'] ?? 0,
             $fact['flue_gas_temp'] ?? 0,
             $fact['gas_flow'] ?? 0,
-            $o2Content,
+            $fact['excess_air'] ?? 1.09,
             20
         );
-        
-        $calcDeviations = [];
-        if (isset($fact['feedwater_temp'])) {
-            $refVal = round($calc['feedwater_temp_ref'], 1);
-            $dev = round($fact['feedwater_temp'] - $refVal, 1);
-            $calcDeviations['feedwater_temp'] = [
-                'fact' => $fact['feedwater_temp'],
-                'ref' => $refVal,
-                'dev' => $dev,
-                'status' => abs($dev) > 5 ? '⚠️' : '✓'
-            ];
-        }
-        
-        if (isset($fact['o2_content'])) {
-            $refVal = round($calc['o2_ref'], 2);
-            $dev = round($fact['o2_content'] - $refVal, 2);
-            $calcDeviations['o2_content'] = [
-                'fact' => $fact['o2_content'],
-                'ref' => $refVal,
-                'dev' => $dev,
-                'status' => abs($dev) > 0.5 ? '⚠️' : '✓'
-            ];
-        }
 
         $fuelSavings = [];
         foreach ($deviations as $param => $data) {
@@ -114,8 +100,10 @@ if (isset($_GET['action']) && $_GET['action'] === 'monitor') {
                 'o2_content' => 'o2',
                 default => null
             };
-            if ($paramKey && abs($data['dev'] ?? 0) > 0.01) {
-                $saving = BoilerCalculator::calcFuelImpact($paramKey, $data['dev'] ?? 0, $fact['load'] ?? 0);
+            
+            if ($paramKey) {
+                $dev = $data['dev'] ?? 0;
+                $saving = BoilerCalculator::calcFuelImpact($paramKey, $dev, $fact['load'] ?? 0);
                 $fuelSavings[$param] = round($saving, 4);
             }
         }
@@ -138,7 +126,6 @@ if (isset($_GET['action']) && $_GET['action'] === 'monitor') {
             'ref'             => $ref,
             'deviations'      => $deviations,
             'calculated'      => $calc,
-            'calc_deviations' => $calcDeviations,
             'fuel_savings'    => $fuelSavings,
             'efficiency_score' => $efficiencyScore,
             'optimal_load'    => $optimalLoad
@@ -149,7 +136,7 @@ if (isset($_GET['action']) && $_GET['action'] === 'monitor') {
         
     } catch (Exception $e) {
         header('Content-Type: application/json; charset=utf-8');
-        echo json_encode(['error' => 'Ошибка сервера']);
+        echo json_encode(['error' => 'Ошибка сервера: ' . $e->getMessage()]);
     }
     exit;
 }

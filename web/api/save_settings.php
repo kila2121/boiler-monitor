@@ -7,7 +7,8 @@ if (session_status() === PHP_SESSION_NONE) {
 }
 
 if (isset($_POST['action'])) {
-    if ($_POST['action'] !== 'saveReference' && $_POST['action'] !== 'cleanNow' && $_POST['action'] !== 'updateRetention') {
+    $allowedActions = ['saveReference', 'cleanNow', 'updateRetention', 'saveBoilerParams'];
+    if (!in_array($_POST['action'], $allowedActions)) {
         return;
     }
 
@@ -46,6 +47,7 @@ if (isset($_POST['action'])) {
         $boilerId = $stmt->fetchColumn();
     }
 
+    // 1. Сохранение эталонов
     if ($action === 'saveReference') {
         $loadMin = filter_var($_POST['load_min'] ?? 0, FILTER_VALIDATE_FLOAT);
         $loadMax = filter_var($_POST['load_max'] ?? 0, FILTER_VALIDATE_FLOAT);
@@ -93,13 +95,20 @@ if (isset($_POST['action'])) {
         exit;
     }
 
+    // 2. Очистка старых записей сейчас
     if ($action === 'cleanNow') {
-        $pdo->exec("DELETE FROM measurement_values WHERE measurement_id IN (SELECT id FROM measurements WHERE timestamp < NOW() - INTERVAL 1 DAY)");
-        $pdo->exec("DELETE FROM measurements WHERE timestamp < NOW() - INTERVAL 1 DAY");
-        echo json_encode(['success' => true]);
+        try {
+            $pdo->exec("DELETE FROM deviation_log WHERE created_at < NOW() - INTERVAL 1 DAY");
+            $pdo->exec("DELETE FROM measurement_values WHERE measurement_id IN (SELECT id FROM measurements WHERE timestamp < NOW() - INTERVAL 1 DAY)");
+            $pdo->exec("DELETE FROM measurements WHERE timestamp < NOW() - INTERVAL 1 DAY");
+            echo json_encode(['success' => true]);
+        } catch (Exception $e) {
+            echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+        }
         exit;
     }
 
+    // 3. Обновление периода хранения
     if ($action === 'updateRetention') {
         $days = filter_var($_POST['days'] ?? 1, FILTER_VALIDATE_INT);
         if ($days === false || $days < 1 || $days > 365) {
@@ -107,19 +116,44 @@ if (isset($_POST['action'])) {
             exit;
         }
         
-        $pdo->exec("DROP EVENT IF EXISTS clean_old_measurements");
+        try {
+            $pdo->exec("DROP EVENT IF EXISTS clean_old_measurements");
+            
+            $sql = "CREATE EVENT clean_old_measurements 
+                    ON SCHEDULE EVERY 1 DAY 
+                    STARTS CURRENT_TIMESTAMP 
+                    DO BEGIN 
+                        DELETE FROM deviation_log WHERE created_at < NOW() - INTERVAL $days DAY;
+                        DELETE FROM measurement_values 
+                        WHERE measurement_id IN (SELECT id FROM measurements WHERE timestamp < NOW() - INTERVAL $days DAY);
+                        DELETE FROM measurements WHERE timestamp < NOW() - INTERVAL $days DAY;
+                    END";
+            $pdo->exec($sql);
+            
+            echo json_encode(['success' => true]);
+        } catch (Exception $e) {
+            echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+        }
+        exit;
+    }
+
+    // 4. Сохранение параметров котла
+    if ($action === 'saveBoilerParams') {
+        $loadMin = filter_var($_POST['load_min'] ?? 0, FILTER_VALIDATE_FLOAT);
+        $loadMax = filter_var($_POST['load_max'] ?? 0, FILTER_VALIDATE_FLOAT);
         
-        $sql = "CREATE EVENT clean_old_measurements 
-                ON SCHEDULE EVERY 1 DAY 
-                STARTS CURRENT_TIMESTAMP 
-                DO BEGIN 
-                    DELETE FROM measurement_values 
-                    WHERE measurement_id IN (SELECT id FROM measurements WHERE timestamp < NOW() - INTERVAL $days DAY);
-                    DELETE FROM measurements WHERE timestamp < NOW() - INTERVAL $days DAY;
-                END";
-        $pdo->exec($sql);
+        if ($loadMin === false || $loadMax === false || $loadMin >= $loadMax) {
+            echo json_encode(['success' => false, 'message' => 'Некорректный диапазон нагрузки']);
+            exit;
+        }
         
-        echo json_encode(['success' => true]);
+        try {
+            $stmt = $pdo->prepare("UPDATE boilers SET load_min = ?, load_max = ? WHERE id = ?");
+            $stmt->execute([$loadMin, $loadMax, $boilerId]);
+            echo json_encode(['success' => true]);
+        } catch (Exception $e) {
+            echo json_encode(['success' => false, 'message' => $e->getMessage()]);
+        }
         exit;
     }
 

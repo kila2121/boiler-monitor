@@ -14,6 +14,15 @@ function calculate($fact, $ref, $boiler) {
         'efficiency', 'fuel_consumption', 'heat_output', 'excess_air_target'
     ];
     
+    // ВРЕМЕННАЯ ОТЛАДКА
+    $debug = [];
+    $debug['fact_keys'] = array_keys($fact);
+    $debug['ref_keys'] = array_keys($ref);
+    $debug['fact_excess_air'] = $fact['excess_air'] ?? 'NOT SET';
+    $debug['ref_excess_air'] = $ref['excess_air'] ?? 'NOT SET';
+    
+    file_put_contents(__DIR__ . '/debug_calc.log', print_r($debug, true), FILE_APPEND);
+    
     $stmtLog = null;
     if ($measurementId) {
         $stmtLog = $pdo->prepare("INSERT IGNORE INTO deviation_log (measurement_id, parameter, deviation, status) VALUES (:mid, :param, :dev, :status)");

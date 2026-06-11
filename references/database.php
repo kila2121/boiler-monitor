@@ -4,13 +4,16 @@ function getReference($boiler, $load) {
     $pdo = $db->dbs;
     
     $stmt = $pdo->prepare("
-        SELECT p.code, rv.reference_value, rv.max_deviation
+        SELECT p.code, 
+               ANY_VALUE(rv.reference_value) as reference_value, 
+               ANY_VALUE(rv.max_deviation) as max_deviation
         FROM reference_values rv
         JOIN parameters p ON p.id = rv.parameter_id
         JOIN boilers b ON b.id = rv.boiler_id
         WHERE b.code = :code 
           AND rv.load_min <= :ld1 
           AND rv.load_max >= :ld2
+        GROUP BY p.code
     ");
     $stmt->execute([
         ':code' => $boiler['id'],
@@ -30,3 +33,4 @@ function getReference($boiler, $load) {
     
     return $ref;
 }
+?>

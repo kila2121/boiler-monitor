@@ -11,19 +11,26 @@ let soundEnabled = false,
   audioUnlocked = false;
 let currentLoadRange = { min: 200, max: 480 };
 
+let refreshInterval = null;
+let statsInterval = null;
+let loggingOut = false;
+
 function getCsrfToken() {
   const input = document.querySelector('input[name="csrf_token"]');
   return input ? input.value : "";
 }
 
-loadBoilers();
+const isAuthPage = document.querySelector('.auth') !== null;
+if (!isAuthPage) {
+  loadBoilers();
 
-const infoBlock = document.querySelector(".info");
-if (infoBlock) {
-  load();
-  loadStats();
-  setInterval(load, INTERVAL);
-  setInterval(loadStats, 30000);
+  const infoBlock = document.querySelector(".info");
+  if (infoBlock) {
+    load();
+    loadStats();
+    refreshInterval = setInterval(load, INTERVAL);
+    statsInterval = setInterval(loadStats, 30000);
+  }
 }
 
 document.querySelectorAll(".tab").forEach((tab) => {
@@ -55,8 +62,16 @@ window.addEventListener("hashchange", () =>
 );
 
 async function loadStats() {
+  if (loggingOut || isAuthPage) return;
   try {
     const res = await fetch(`index.php?action=stats&boiler=${activeBoiler}`);
+    if (res.status === 401 || res.status === 403) {
+      if (!loggingOut) {
+        showMessage("error", "Сессия истекла, перенаправление...");
+        setTimeout(() => location.reload(), 2000);
+      }
+      return;
+    }
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const stats = await res.json();
     if (stats.error) throw new Error(stats.error);
@@ -69,7 +84,7 @@ async function loadStats() {
     if (devEl) devEl.textContent = `⚠️ Отклонений: ${stats.deviation_count}`;
   } catch (e) {
     console.error(e);
-    showMessage("error", "Ошибка загрузки статистики: " + e.message);
+    if (!loggingOut) showMessage("error", "Ошибка загрузки статистики: " + e.message);
   }
 }
 
@@ -97,11 +112,19 @@ function formatDate(timestamp, minutes) {
 }
 
 async function loadCharts(minutes) {
+  if (loggingOut || isAuthPage) return;
   if (!minutes) minutes = document.getElementById("chartPeriod")?.value || "30";
   try {
     const res = await fetch(
       `index.php?action=history&minutes=${minutes}&boiler=${activeBoiler}`,
     );
+    if (res.status === 401 || res.status === 403) {
+      if (!loggingOut) {
+        showMessage("error", "Сессия истекла, перенаправление...");
+        setTimeout(() => location.reload(), 2000);
+      }
+      return;
+    }
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const history = await res.json();
     if (!history.length) {
@@ -146,10 +169,10 @@ async function loadCharts(minutes) {
       "#f59e0b",
       maxTicks,
     );
-    showMessage("success", "Графики обновлены");
+    if (!loggingOut) showMessage("success", "Графики обновлены");
   } catch (e) {
     console.error(e);
-    showMessage("error", "Ошибка загрузки графиков: " + e.message);
+    if (!loggingOut) showMessage("error", "Ошибка загрузки графиков: " + e.message);
   }
 }
 
@@ -237,8 +260,16 @@ function formatSaving(value) {
 }
 
 async function load() {
+  if (loggingOut || isAuthPage) return;
   try {
     const res = await fetch(`index.php?action=monitor&boiler=${activeBoiler}`);
+    if (res.status === 401 || res.status === 403) {
+      if (!loggingOut) {
+        showMessage("error", "Сессия истекла, перенаправление...");
+        setTimeout(() => location.reload(), 2000);
+      }
+      return;
+    }
     if (!res.ok) throw new Error(`HTTP ${res.status} ${res.statusText}`);
     const json = await res.json();
     if (json.error) throw new Error(json.error);
@@ -319,55 +350,55 @@ async function load() {
 
     if (json.calculated) {
       const calc = json.calculated;
-      addSeparatorRow(tbody);
-      addCalcRow(tbody, "КПД (расчётный)", calc.efficiency.toFixed(2) + " %");
+      addSeparatorRow(tbody, "Расчитываемые параметры");
+      addCalcRow(tbody, "КПД (расчётный)", calc.efficiency ? calc.efficiency.toFixed(2) + " %" : "—");
       addCalcRow(
         tbody,
         "Расход газа (нормативный)",
-        calc.fuel_natural.toFixed(2) + " тыс.м³/ч",
+        calc.fuel_natural ? calc.fuel_natural.toFixed(2) + " тыс.м³/ч" : "—"
       );
       addCalcRow(
         tbody,
         "Выработка тепла",
-        calc.heat_output.toFixed(2) + " Гкал/ч",
-      );
-      addCalcRow(
-        tbody,
-        "Коэфф. избытка воздуха (α)",
-        calc.excess_air.toFixed(3),
+        calc.heat_output ? calc.heat_output.toFixed(2) + " Гкал/ч" : "—"
       );
     }
 
     if (json.efficiency_score) {
       const score = json.efficiency_score;
-      const scoreRow = document.createElement("tr");
-      scoreRow.style.backgroundColor = "rgba(59,130,246,0.2)";
-      const cell = document.createElement("td");
-      cell.colSpan = 5;
-      cell.style.textAlign = "center";
-      cell.style.fontWeight = "bold";
-      cell.style.padding = "10px";
-      let gradeColor = "";
-      if (score.grade === "Отлично") gradeColor = "#22c55e";
-      else if (score.grade === "Хорошо") gradeColor = "#3b82f6";
-      else if (score.grade === "Удовлетворительно") gradeColor = "#f59e0b";
-      else if (score.grade === "Требует внимания") gradeColor = "#f97316";
-      else gradeColor = "#ef4444";
-      cell.innerHTML = `Оценка эффективности: ${score.score} / 100 <span style="color: ${gradeColor};">(${score.grade})</span>`;
-      scoreRow.appendChild(cell);
-      tbody.appendChild(scoreRow);
-
-      if (score.recommendations && score.recommendations.length) {
-        score.recommendations.forEach((rec) => {
-          const recRow = document.createElement("tr");
-          recRow.style.backgroundColor = "rgba(239,68,68,0.1)";
-          const recCell = document.createElement("td");
-          recCell.colSpan = 5;
-          recCell.textContent = rec;
-          recRow.appendChild(recCell);
-          tbody.appendChild(recRow);
-        });
+      const scoreDiv = document.getElementById("efficiencyScore");
+      const recDiv = document.getElementById("efficiencyRecommendations");
+      
+      if (scoreDiv) {
+        let gradeColor = "";
+        if (score.grade === "Отлично") gradeColor = "#22c55e";
+        else if (score.grade === "Хорошо") gradeColor = "#3b82f6";
+        else if (score.grade === "Удовлетворительно") gradeColor = "#f59e0b";
+        else if (score.grade === "Требует внимания") gradeColor = "#f97316";
+        else gradeColor = "#ef4444";
+        
+        scoreDiv.innerHTML = `<span style="font-size:1.2rem; font-weight:bold;">${score.score} / 100</span>
+                              <span style="color:${gradeColor};"> (${score.grade})</span>`;
       }
+      
+      if (recDiv) {
+        recDiv.innerHTML = "";
+        if (score.recommendations && score.recommendations.length) {
+          score.recommendations.forEach(rec => {
+            const p = document.createElement("p");
+            p.textContent = rec;
+            p.className = "rec-text";
+            recDiv.appendChild(p);
+          });
+        } else {
+          recDiv.innerHTML = '<p class="rec-text">✅ Все параметры в норме</p>';
+        }
+      }
+    } else {
+      const scoreDiv = document.getElementById("efficiencyScore");
+      const recDiv = document.getElementById("efficiencyRecommendations");
+      if (scoreDiv) scoreDiv.innerHTML = "--";
+      if (recDiv) recDiv.innerHTML = "";
     }
 
     if (json.fuel_savings && Object.keys(json.fuel_savings).length > 0) {
@@ -421,12 +452,14 @@ async function load() {
     if (hasWarning) playAlert();
   } catch (e) {
     console.error(e);
-    document.getElementById("boilerName").textContent =
-      "Ошибка загрузки данных";
-    showMessage(
-      "error",
-      "Не удалось загрузить данные мониторинга: " + e.message,
-    );
+    if (!loggingOut) {
+      document.getElementById("boilerName").textContent =
+        "Ошибка загрузки данных";
+      showMessage(
+        "error",
+        "Не удалось загрузить данные мониторинга: " + e.message,
+      );
+    }
   }
 }
 
@@ -439,8 +472,14 @@ function addCell(row, text) {
 
 function addStatusCell(row, text, type) {
   const td = document.createElement("td");
-  td.textContent = text;
   td.className = "status-" + type;
+  if (type === "normal") {
+    td.innerHTML = '<i class="fas fa-check-circle" style="color: #22c55e;"></i> Норма';
+  } else if (type === "error") {
+    td.innerHTML = '<i class="fas fa-exclamation-triangle" style="color: #ef4444;"></i> Отклонение';
+  } else {
+    td.textContent = text;
+  }
   row.appendChild(td);
 }
 
@@ -465,6 +504,8 @@ function addCalcRow(tbody, label, value) {
 }
 
 function showMessage(type, text, duration = 4000) {
+  if (loggingOut) return;
+  
   const old = document.querySelector(`.${type}`);
   if (old) old.remove();
   const div = document.createElement("div");
@@ -492,6 +533,7 @@ function showMessage(type, text, duration = 4000) {
 }
 
 async function sendRequest(url, options, successMessage, errorMessage) {
+  if (loggingOut && !url.includes('logout')) return { success: false, message: "Logging out" };
   try {
     const csrfToken = getCsrfToken();
     if (options.method === "POST" && csrfToken) {
@@ -506,31 +548,41 @@ async function sendRequest(url, options, successMessage, errorMessage) {
     const res = await fetch(url, options);
     const data = await res.json();
     if (res.status === 401 || res.status === 403) {
-      showMessage(
-        "error",
-        data.message || "Ошибка доступа. Авторизуйтесь заново.",
-      );
-      setTimeout(() => location.reload(), 2000);
+      if (!loggingOut && !url.includes('logout')) {
+        showMessage(
+          "error",
+          data.message || "Ошибка доступа. Авторизуйтесь заново.",
+        );
+        setTimeout(() => location.reload(), 2000);
+      }
       return { success: false, message: "Unauthorized" };
     }
     if (data.success) {
-      if (successMessage) showMessage("success", successMessage);
+      if (successMessage && !loggingOut) showMessage("success", successMessage);
     } else {
-      if (errorMessage) showMessage("error", errorMessage || data.message);
+      if (errorMessage && !loggingOut) showMessage("error", errorMessage || data.message);
     }
     return data;
   } catch (e) {
-    showMessage("error", "Ошибка сети: " + e.message);
+    if (!loggingOut) showMessage("error", "Ошибка сети: " + e.message);
     return { success: false, message: e.message };
   }
 }
 
 async function exportToExcel() {
+  if (loggingOut || isAuthPage) return;
   const minutes = document.getElementById("exportPeriod").value;
   try {
     const res = await fetch(
       `index.php?action=history&minutes=${minutes}&boiler=${activeBoiler}`,
     );
+    if (res.status === 401 || res.status === 403) {
+      if (!loggingOut) {
+        showMessage("error", "Сессия истекла, перенаправление...");
+        setTimeout(() => location.reload(), 2000);
+      }
+      return;
+    }
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     if (!data.length) {
@@ -555,7 +607,7 @@ async function exportToExcel() {
     labels.forEach((l) => {
       html += `<th>${escapeHtml(l)}</th>`;
     });
-    html += "<tr></thead><tbody>";
+    html += "</table></thead><tbody>";
     data.forEach((row) => {
       html += `<tr><td>${escapeHtml(row.timestamp)}</td><td>${escapeHtml(row.load)}</td>`;
       params.forEach((p) => {
@@ -718,8 +770,16 @@ function playAlert() {
 }
 
 async function loadBoilers() {
+  if (loggingOut || isAuthPage) return;
   try {
     const res = await fetch("index.php?action=boilers");
+    if (res.status === 401 || res.status === 403) {
+      if (!loggingOut) {
+        showMessage("error", "Сессия истекла, перенаправление...");
+        setTimeout(() => location.reload(), 2000);
+      }
+      return;
+    }
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const boilers = await res.json();
     if (boilers.error) throw new Error(boilers.error);
@@ -754,7 +814,7 @@ async function loadBoilers() {
     loadStats();
   } catch (e) {
     console.error(e);
-    showMessage("error", "Ошибка загрузки списка котлов: " + e.message);
+    if (!loggingOut) showMessage("error", "Ошибка загрузки списка котлов: " + e.message);
   }
 }
 
@@ -766,9 +826,9 @@ document.getElementById("boilerSelect").addEventListener("change", function () {
   showMessage("success", "Котёл выбран");
 });
 
-document
-  .getElementById("btn-setting")
+document.getElementById("btn-setting")
   .addEventListener("click", async function () {
+    if (isAuthPage) return;
     document.querySelector(".settings").classList.add("open");
     await loadSettings();
     document.getElementById("saveReference").onclick = async function () {
@@ -900,9 +960,17 @@ document
   });
 
 async function loadSettings() {
+  if (loggingOut || isAuthPage) return;
   const boiler = activeBoiler;
   try {
     const res = await fetch(`index.php?action=get_settings&boiler=${boiler}`);
+    if (res.status === 401 || res.status === 403) {
+      if (!loggingOut) {
+        showMessage("error", "Сессия истекла, перенаправление...");
+        setTimeout(() => location.reload(), 2000);
+      }
+      return;
+    }
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     if (data.error) throw new Error(data.error);
@@ -982,16 +1050,45 @@ async function loadSettings() {
     }
   } catch (e) {
     console.error(e);
-    showMessage("error", "Ошибка загрузки настроек: " + e.message);
+    if (!loggingOut) showMessage("error", "Ошибка загрузки настроек: " + e.message);
   }
 }
 
 document.addEventListener("click", function (e) {
   const settings = document.querySelector(".settings");
   if (
+    settings &&
     settings.classList.contains("open") &&
     !settings.contains(e.target) &&
     e.target.id !== "btn-setting"
   )
     settings.classList.remove("open");
 });
+
+const logout = document.getElementById('logout');
+if (logout) {
+    logout.addEventListener('click', async function() {
+        const csrfInput = document.querySelector('input[name="csrf_token"]');
+        if (!csrfInput) {
+            showMessage('error', 'Ошибка: не найден CSRF-токен');
+            return;
+        }
+        
+        loggingOut = true;
+        
+        if (refreshInterval) clearInterval(refreshInterval);
+        if (statsInterval) clearInterval(statsInterval);
+        
+        try {
+            await fetch('index.php?action=logout', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: 'csrf_token=' + encodeURIComponent(csrfInput.value)
+            });
+        } catch (e) {
+            console.warn('Logout error:', e);
+        }
+        
+        location.reload();
+    });
+}
