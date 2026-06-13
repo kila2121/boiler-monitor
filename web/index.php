@@ -34,6 +34,9 @@
     <?php endif; ?>
 
     <?php if (!isset($_SESSION['user'])): ?>
+        <div class="top-bar-left">
+            <button id="themeToggle" title="Сменить тему">🌙</button>
+        </div>
         <div class="auth">
             <form method="POST" action="index.php?action=auth">
                 <input name="csrf_token" type="hidden" value="<?= generate_csrf_token() ?>">
